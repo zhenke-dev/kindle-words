@@ -23,7 +23,7 @@
 ```
 KindleWords/
 ├── book/words.json       # 内置词书（6550 词）
-├── docx/                 # 硬件与 KPW6 浏览器调研文档
+├── docx/                 # 项目相关文档
 ├── fsrs-c/               # FSRS-6 算法 C 实现（带 144 项自测）
 └── firmware/             # ESP32 固件（PlatformIO 工程）
     ├── platformio.ini    # espressif32@6.8.1 / 16MB Flash / OPI PSRAM
