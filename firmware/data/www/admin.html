@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kindle Words 管理</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Georgia, "Songti SC", "Microsoft YaHei", serif;
+    background: #fafafa; color: #111; font-size: 16px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 24px 20px 60px; }
+  header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 2px solid #111; padding-bottom: 10px; margin-bottom: 8px;
+  }
+  header h1 { font-size: 20px; letter-spacing: .1em; }
+  header .ver { font-size: 14px; color: #555; }
+  .sect { margin-top: 28px; background: #fff; border: 1px solid #ddd; padding: 18px 20px; }
+  .sect h2 { font-size: 16px; margin-bottom: 14px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+  .stat { font-size: 15px; line-height: 2; }
+  .stat b { font-size: 20px; }
+  textarea {
+    width: 100%; height: 130px; font-family: ui-monospace, Consolas, monospace;
+    font-size: 13px; padding: 10px; border: 1px solid #ccc; border-radius: 4px;
+    resize: vertical;
+  }
+  .btn {
+    display: inline-block; padding: 9px 22px; margin-top: 12px;
+    background: #111; color: #fff; border: none; border-radius: 4px;
+    font-size: 14px; cursor: pointer; text-decoration: none;
+  }
+  .btn.gray { background: #fff; color: #111; border: 1px solid #999; }
+  .btn + .btn { margin-left: 10px; }
+  .msg { font-size: 13px; color: #2a7d2a; margin-left: 10px; }
+  .msg.err { color: #b00; }
+  .hint { font-size: 13px; color: #666; line-height: 1.7; margin-top: 8px; }
+  label.inline { font-size: 14px; margin-right: 8px; }
+  input.num {
+    width: 80px; padding: 5px 8px; font-size: 14px;
+    border: 1px solid #ccc; border-radius: 4px; text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>KINDLE WORDS 管理</h1>
+    <span class="ver">参数版本 v<b id="s-pver">–</b></span>
+  </header>
+
+  <div class="sect">
+    <h2>学习数据</h2>
+    <div class="stat">
+      词书进度 <b id="s-learned">–</b> / <span id="s-total">–</span>
+      ・ 今日新学 <b id="s-newdone">–</b> 词
+      ・ 今日复习 <b id="s-old">–</b> 词<br>
+      累计复习 <b id="s-reviews">–</b> 次
+      ・ 期望保留率 <span id="s-dr">–</span>
+    </div>
+    <a class="btn" href="/api/export.csv" download="reviews.csv">下载复习记录 (CSV)</a>
+    <div class="hint">CSV 列：ts, day, word_id, word, rating, elapsed_days, s_before, d_before, s_after, d_after, interval</div>
+  </div>
+
+  <div class="sect">
+    <h2>FSRS 参数更新</h2>
+    <textarea id="ta-w" spellcheck="false"></textarea>
+    <div class="hint">21 个权重，逗号或空格分隔。在 PC 上完成参数优化后粘贴于此并更新。</div>
+    <button class="btn" id="b-save-w">更新参数</button>
+    <button class="btn gray" id="b-reset-w">恢复默认参数</button>
+    <span class="msg" id="m-w"></span>
+  </div>
+
+  <div class="sect">
+    <h2>学习计划</h2>
+    <label class="inline">每日新词</label><input class="num" id="in-npd" type="number" min="1" max="200">
+    <label class="inline" style="margin-left:16px">期望保留率</label><input class="num" id="in-dr" type="number" step="0.01" min="0.7" max="0.99">
+    <label class="inline" style="margin-left:16px">新词顺序</label>
+    <select id="sel-order" style="padding:5px 8px;font-size:14px">
+      <option value="0">按词书顺序</option>
+      <option value="1">随机</option>
+    </select>
+    <br>
+    <button class="btn" id="b-save-set">保存计划</button>
+    <span class="msg" id="m-set"></span>
+  </div>
+</div>
+
+<script>
+function $(id) { return document.getElementById(id); }
+
+function api(path, body, cb, err) {
+  var opt = { cache: 'no-store' };
+  if (body !== null) {
+    opt.method = 'POST';
+    opt.headers = { 'Content-Type': 'application/json' };
+    opt.body = JSON.stringify(body);
+  }
+  fetch(path, opt).then(function (r) { return r.json(); }).then(cb)
+    .catch(function () { if (err) err(); });
+}
+
+function loadAll() {
+  api('/api/stats', null, function (s) {
+    $('s-learned').textContent = s.learned;
+    $('s-total').textContent = s.total;
+    $('s-newdone').textContent = s.new_done;
+    $('s-old').textContent = s.old_today;
+    $('s-reviews').textContent = s.total_reviews;
+    $('s-dr').textContent = s.dr;
+    $('s-pver').textContent = s.params_version;
+    $('in-npd').value = s.new_per_day;
+    $('in-dr').value = s.dr;
+    $('sel-order').value = String(s.order ? 1 : 0);
+  });
+  api('/api/params', null, function (p) {
+    $('ta-w').value = p.w.join(', ');
+  });
+}
+
+$('b-save-w').onclick = function () {
+  var m = $('m-w');
+  var parts = $('ta-w').value.split(/[,\s]+/);
+  var w = [];
+  for (var i = 0; i < parts.length; i++) {
+    var v = parseFloat(parts[i]);
+    if (!isNaN(v)) w.push(v);
+  }
+  if (w.length !== 21) {
+    m.textContent = '需要 21 个数值（当前 ' + w.length + ' 个）';
+    m.className = 'msg err';
+    return;
+  }
+  api('/api/params', { w: w }, function () {
+    m.textContent = '已更新';
+    m.className = 'msg';
+    loadAll();
+  });
+};
+
+$('b-reset-w').onclick = function () {
+  if (!confirm('恢复为默认 FSRS 参数？')) return;
+  api('/api/reset_params', {}, function () {
+    $('m-w').textContent = '已恢复默认';
+    $('m-w').className = 'msg';
+    loadAll();
+  });
+};
+
+$('b-save-set').onclick = function () {
+  api('/api/settings', {
+    new_per_day: parseInt($('in-npd').value, 10),
+    dr: parseFloat($('in-dr').value),
+    order: parseInt($('sel-order').value, 10)
+  }, function () { $('m-set').textContent = '已保存'; });
+};
+
+loadAll();
+</script>
+</body>
+</html>
