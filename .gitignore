@@ -20,3 +20,6 @@ Thumbs.db
 
 *.log
 logs/
+
+# PlatformIO：依赖树由 platformio.ini 按需拉取，构建产物不入库
+.pio/
